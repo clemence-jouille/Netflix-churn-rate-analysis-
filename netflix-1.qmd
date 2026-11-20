@@ -1,0 +1,340 @@
+---
+title: "netflix"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+#EXPLORING THE DATASET
+library(tidyverse)
+
+netflix <- read.csv("netflix_customer_churn.csv")
+
+View(netflix)
+
+head(netflix)
+
+glimpse(netflix)
+
+summary(netflix)
+```
+
+```{r}
+#Descriptive statistics
+descriptive_stats <- netflix %>%
+  mutate(
+    churn_status = if_else(churned == 1, "Churned", "Stayed")
+  ) %>%
+  group_by(churn_status) %>%
+  summarise(
+    n = n(),
+    
+    mean_watch_hours = mean(watch_hours, na.rm = TRUE),
+    median_watch_hours = median(watch_hours, na.rm = TRUE),
+    sd_watch_hours = sd(watch_hours, na.rm = TRUE),
+    
+    mean_last_login = mean(last_login_days, na.rm = TRUE),
+    median_last_login = median(last_login_days, na.rm = TRUE),
+    sd_last_login = sd(last_login_days, na.rm = TRUE),
+    
+    mean_profiles = mean(number_of_profiles, na.rm = TRUE),
+    median_profiles = median(number_of_profiles, na.rm = TRUE),
+    sd_profiles = sd(number_of_profiles, na.rm = TRUE),
+    
+    mean_daily_watch = mean(avg_watch_time_per_day, na.rm = TRUE),
+    median_daily_watch = median(avg_watch_time_per_day, na.rm = TRUE),
+    sd_daily_watch = sd(avg_watch_time_per_day, na.rm = TRUE)
+  ) %>%
+  mutate(
+    percentage = round(n / sum(n) * 100, 2)
+  ) %>%
+  relocate(percentage, .after = n)
+
+descriptive_stats
+```
+
+```{r}
+# Proportion for the categorical variable subscription_type
+churn_subscription <- netflix %>%
+  group_by(subscription_type) %>%
+  summarise(
+    churn_rate = mean(churned) * 100
+  )
+
+churn_subscription
+```
+
+```{r}
+#VISUALIZATION 1: probability of churn by watch hours
+library(ggplot2)
+
+ggplot(netflix, aes(x = watch_hours, y = churned)) +
+  geom_jitter(color = "grey60",
+              alpha = 0.3,
+              width = 0,
+              height = 0.05,
+              size = 1) +
+  geom_smooth(method = "glm",
+              method.args = list(family = binomial),
+              se = FALSE,
+              color = "blue",
+              linewidth = 1) +
+  labs(title = "Watch Hours vs Customer Churn",
+       x = "Watch Hours",
+       y = "Probability of Churn") +
+  theme_minimal()
+```
+
+```{r}
+#VISUALIZATION 2: watch hours by churn
+netflix %>%
+  mutate(
+    churn_status = if_else(
+      churned == 1,
+      "Churned",
+      "Stayed"
+    )
+  ) %>%
+  ggplot(
+    aes(
+      x = churn_status,
+      y = watch_hours
+    )
+  ) +
+  geom_boxplot() +
+  labs(
+    title = "Watch Hours by Customer Churn",
+    x = "Customer Status",
+    y = "Watch Hours"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#VISUALIZATION 3: days since last login
+
+netflix %>%
+  mutate(
+    churn_status = if_else(
+      churned == 1,
+      "Churned",
+      "Stayed"
+    )
+  ) %>%
+  ggplot(
+    aes(
+      x = churn_status,
+      y = last_login_days
+    )
+  ) +
+  geom_boxplot() +
+  labs(
+    title = "Days Since Last Login by Churn Status",
+    x = "Customer Status",
+    y = "Days Since Last Login"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#VISUALIZATION 4: customer churn by subscription type
+netflix <- netflix %>%
+  mutate(
+    churn_status = if_else(
+      churned == 1,
+      "Churned",
+      "Not Churned"
+    )
+  )
+
+ggplot(
+  netflix,
+  aes(
+    x = subscription_type,
+    fill = churn_status
+  )
+) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Churned" = "tomato",
+      "Not Churned" = "steelblue"
+    )
+  ) +
+  labs(
+    title = "Customer Churn by Subscription Type",
+    x = "Subscription Type",
+    y = "Percentage of Customers",
+    fill = "Customer Status"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Singularity involving monthly_fee and subscription_type
+FeeModel <- lm(
+  monthly_fee ~ subscription_type,
+  data = netflix
+)
+
+summary(FeeModel)
+```
+
+```{r}
+# Multicollinearity check for watch_hours and avg_watch_time_per_day
+cor(
+  netflix$watch_hours,
+  netflix$avg_watch_time_per_day
+)
+```
+
+```{r}
+#FULL MODEL
+FullModel <- glm(
+  churned ~ age +
+    gender +
+    subscription_type +
+    watch_hours +
+    last_login_days +
+    region +
+    device +
+    monthly_fee +
+    payment_method +
+    number_of_profiles +
+    avg_watch_time_per_day +
+    favorite_genre,
+  data = netflix,
+  family = binomial
+)
+
+summary(FullModel)
+```
+
+```{r}
+# MODEL A
+ModelA <- glm(
+  churned ~ subscription_type +
+    watch_hours +
+    last_login_days +
+    payment_method +
+    number_of_profiles +
+    avg_watch_time_per_day,
+  data = netflix,
+  family = binomial
+)
+
+summary(ModelA)
+```
+
+```{r}
+# MODEL B
+ModelB <- glm(
+  churned ~ subscription_type +
+    watch_hours +
+    last_login_days +
+    payment_method +
+    number_of_profiles +
+    avg_watch_time_per_day +
+    gender,
+  data = netflix,
+  family = binomial
+)
+
+summary(ModelB)
+```
+
+```{r}
+# MODEL C
+ModelC <- glm(
+  churned ~ subscription_type +
+    watch_hours +
+    last_login_days +
+    number_of_profiles +
+    avg_watch_time_per_day,
+  data = netflix,
+  family = binomial
+)
+
+summary(ModelC)
+```
+
+```{r}
+# MODEL COMPARISON: AIC AND BIC
+
+model_comparison <- data.frame(
+  Model = c("Full Model", "Model A", "Model B", "Model C"),
+  
+  AIC = c(
+    AIC(FullModel),
+    AIC(ModelA),
+    AIC(ModelB),
+    AIC(ModelC)
+  ),
+  
+  BIC = c(
+    BIC(FullModel),
+    BIC(ModelA),
+    BIC(ModelB),
+    BIC(ModelC)
+  )
+)
+
+model_comparison$AIC <- round(model_comparison$AIC, 2)
+model_comparison$BIC <- round(model_comparison$BIC, 2)
+
+model_comparison
+```
+
+```{r}
+# COEFFICIENTS AND ODDS RATIO (MODEL B)
+ModelB <- glm(
+  churned ~ subscription_type +
+    watch_hours +
+    last_login_days +
+    payment_method +
+    number_of_profiles +
+    avg_watch_time_per_day +
+    gender,
+  data = netflix,
+  family = binomial
+)
+
+summary(ModelB)
+
+# Calculate Odds Ratios
+exp(coef(ModelB))
+
+OR_table <- data.frame(
+  Predictor = names(coef(ModelB)),
+  Coefficient = round(coef(ModelB), 3),
+  Odds_Ratio = round(exp(coef(ModelB)), 3),
+  P_value = signif(summary(ModelB)$coefficients[, 4], 3)
+)
+
+OR_table
+
+```
